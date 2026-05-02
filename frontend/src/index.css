@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+/* Keep global styles as plain CSS for Tailwind v4. */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  color: rgba(248, 250, 252, 1);
+  background-color: rgb(2, 6, 23); /* slate-950 */
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji',
+    'Segoe UI Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* darker, higher-contrast background */
+  background-image:
+    radial-gradient(900px 560px at 12% 10%, rgba(67, 56, 202, 0.35), transparent 60%),
+    radial-gradient(900px 560px at 88% 15%, rgba(190, 24, 93, 0.28), transparent 62%),
+    radial-gradient(760px 520px at 50% 95%, rgba(16, 185, 129, 0.14), transparent 60%);
+}
+
+a {
+  color: rgba(199, 210, 254, 1); /* indigo-200 */
+}
+
+a:hover {
+  color: rgba(224, 231, 255, 1); /* indigo-100 */
+}
+
