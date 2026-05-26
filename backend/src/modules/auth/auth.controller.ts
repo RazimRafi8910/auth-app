@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getUserDetails, loginUser, registerUser } from "./auth.service.js";
+import { getUserDetails, loginUser, registerUser, validateOtp } from "./auth.service.js";
 import ApiResponse from "../../utils/apiResponse.js";
 import { COOKIE_MAX_AGE_MS } from "../../config/contants.js";
 import ApiError from "../../utils/apiError.js";
@@ -8,14 +8,30 @@ export const registerController = async (req: Request, res: Response) => {
     
     const result = await registerUser(req.body);
     
-    res.cookie("token", result.token, {
-        secure: process.env.NODE_ENV == "production",
-        sameSite: 'lax',
-        httpOnly: true,
-        maxAge:COOKIE_MAX_AGE_MS,
-    });
+    // res.cookie("token", result.token, {
+    //     secure: process.env.NODE_ENV == "production",
+    //     sameSite: 'lax',
+    //     httpOnly: true,
+    //     maxAge:COOKIE_MAX_AGE_MS,
+    // });
     
-    res.status(201).json(new ApiResponse(201, "User registered successfully",result.user));
+    res.status(201).json(new ApiResponse(201, "OTP generated successfully", { status: true }))
+}
+
+export const otpController = async (req: Request, res: Response) => {
+    const { otp, email } = req.body;
+
+    const result = await validateOtp(otp, email);
+
+    if (result.status) {
+        res.cookie("token", result.data.token, {
+            secure: process.env.NODE_ENV == "production",
+            sameSite: 'lax',
+            httpOnly: true,
+            maxAge: COOKIE_MAX_AGE_MS,
+        });
+        res.status(200).json(new ApiResponse(200, "OTP Matched, account varifyed", { status: true }));
+    }
 }
 
 export const loginController = async (req: Request, res: Response) => {

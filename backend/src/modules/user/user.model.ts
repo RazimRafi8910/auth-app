@@ -9,6 +9,11 @@ const userSchema = new Schema({
         type: String,
         required: true
     },
+    verifyed: {
+        type: Boolean,
+        required: true,
+        default:false
+    },
     role: {
         type: String,
         enum: ["user", "admin"],

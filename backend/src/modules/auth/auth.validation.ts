@@ -17,5 +17,10 @@ export const loginSchema = z.object({
     .regex(/[0-9]/, "Password must contain at least one number"),
 });
 
+export const otpSchema = z.object({
+    email: z.email("email should be valid"),
+    otp:z.number().min(4)
+})
+
 export type RegisterUserInput = z.infer<typeof registerSchema>;
 export type LoginUserInput = z.infer<typeof loginSchema>;

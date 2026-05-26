@@ -5,6 +5,8 @@ import ApiError from '../../utils/apiError.js';
 import bcrypt from 'bcrypt';
 import { JWT_EXPIRY_SECONDS } from '../../config/contants.js';
 import { Types } from 'mongoose';
+import { generateOtp } from './auth.utils.js';
+import { sendEmail } from '../../services/email.service.js';
 
 const jwtKey = process.env.JWT_KEY || "";
 
@@ -18,13 +20,17 @@ const generateToken = (userId: Types.ObjectId, role: string) => {
     });
 }
 
-
 export const registerUser = async ({ fullname, email, password }: RegisterUserInput) => {
     const isUserExists = await User.findOne({ email });
 
     if (isUserExists) {
-        console.log(`[register user] user:${email} exists`);
-        throw new ApiError(409, "Email already in use");
+        if (isUserExists.verifyed) {
+            console.log(`[register user] user:${email} already exists`);
+            throw new ApiError(409, "Email already in use");
+        }
+        const otp = generateOtp(isUserExists.email); // generate otp
+        console.log(`[register user] OTP generated :${otp} for ${user.email}`);
+        return
     }
 
     const hashPassword = await bcrypt.hash(password, 8);
@@ -36,23 +42,43 @@ export const registerUser = async ({ fullname, email, password }: RegisterUserIn
         role: "user",
     });
 
-    if (!user) {
-        console.log(`[register user] failed to create ${email}`);
-        throw new ApiError(400, "Failed to create");
-    }
+    console.log(`[register user] new user created : ${user.email}`);
 
-    const token = generateToken(user._id, user.role);
-
-    const userObject = user.toObject();
-    delete userObject.password;
-    delete (userObject as any).__v;
-
+    const otp = generateOtp(user.email); // generate otp
+    console.log(`[register user] OTP generated :${otp} for ${user.email}`);
     return {
-        user: userObject,
-        token
+        status: true,
+        otp
     }
 }
 
+export const validateOtp = async (otp: number, email: string) => {
+    const userDetails = await User.findOne({ email });
+
+    if (!userDetails) {
+        console.log(`[register user] user:${email} does not exists`);
+        throw new ApiError(404, "Email not found");
+    }
+
+    const existingOtp = generateOtp(userDetails.email);
+    
+    if (existingOtp !== otp) {
+        console.log(`[validate otp] otp does not match, email:${userDetails.email}`);
+        throw new ApiError(400, "OTP does not match");
+    }
+
+    await User.updateOne({ email }, { verifyed: true });
+    const token = generateToken(userDetails._id, userDetails.role);
+
+    return {
+        status: true,
+        message: "OTP matched",
+        data: {
+            user: userDetails,
+            token
+        }
+    }
+}
 
 export const loginUser = async ({ email, password }: LoginUserInput) => {
     const userDetails = await User.findOne({ email }).select("+password");

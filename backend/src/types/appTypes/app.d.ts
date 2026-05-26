@@ -9,6 +9,11 @@ export interface User {
     updatedAt: Date,
 }
 
+export type ServiceResponseType = {
+    status: boolean,
+    message?: string,
+    data?:any
+}
 
 export type UserJwtPaload = {
     userId: string,
