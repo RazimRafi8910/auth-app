@@ -1,36 +1,28 @@
 import { LoginUserInput, RegisterUserInput } from './auth.validation.js';
-import jwt from 'jsonwebtoken';
-import User from '../user/user.model.js';
-import ApiError from '../../utils/apiError.js';
 import bcrypt from 'bcrypt';
-import { JWT_EXPIRY_SECONDS } from '../../config/contants.js';
+import ApiError from '../../utils/apiError.js';
 import { Types } from 'mongoose';
-import { generateOtp } from './auth.utils.js';
+import { generateToken, generateFamilyId, generateTimeWindowOtp } from './auth.utils.js';
 import { sendEmail } from '../../services/email.service.js';
+import redisClient from '../../config/redis.js';
+import User, { UserType } from '../user/user.model.js';
 
 const jwtKey = process.env.JWT_KEY || "";
-
-const generateToken = (userId: Types.ObjectId, role: string) => {
-    const tokenPayload = {
-        userId: userId.toString(),
-        role,
-    }
-    return jwt.sign(tokenPayload, jwtKey, {
-        expiresIn: JWT_EXPIRY_SECONDS,
-    });
-}
 
 export const registerUser = async ({ fullname, email, password }: RegisterUserInput) => {
     const isUserExists = await User.findOne({ email });
 
     if (isUserExists) {
-        if (isUserExists.verifyed) {
+        if (isUserExists.verified) {
             console.log(`[register user] user:${email} already exists`);
             throw new ApiError(409, "Email already in use");
         }
-        const otp = generateOtp(isUserExists.email); // generate otp
-        console.log(`[register user] OTP generated :${otp} for ${user.email}`);
-        return
+        const otp = generateTimeWindowOtp(isUserExists.email); // generate otp
+        console.log(`[register user] OTP generated :${otp} for ${email}`);
+        return {
+            status: true,
+            message: "OTP generated successfully",
+        }
     }
 
     const hashPassword = await bcrypt.hash(password, 8);
@@ -44,7 +36,7 @@ export const registerUser = async ({ fullname, email, password }: RegisterUserIn
 
     console.log(`[register user] new user created : ${user.email}`);
 
-    const otp = generateOtp(user.email); // generate otp
+    const otp = generateTimeWindowOtp(user.email); // generate otp
     console.log(`[register user] OTP generated :${otp} for ${user.email}`);
     return {
         status: true,
@@ -52,8 +44,31 @@ export const registerUser = async ({ fullname, email, password }: RegisterUserIn
     }
 }
 
+export const generateUserOtp = async (email: string) => {
+    const user = await User.findOne({ email }).lean();
+
+    if (!user) {
+        throw new ApiError(404, "User not found with this email");
+    }
+
+    if (user.verified) {
+        throw new ApiError(403, "User email is already verified");
+    }
+
+    // TODO: change otp generation from time window to random digits
+    const otp = generateTimeWindowOtp(user.email);
+
+    //store otp on redis with ttl
+
+    return {
+        status: true,
+        otp,
+    }
+
+}
+
 export const validateOtp = async (otp: number, email: string) => {
-    const userDetails = await User.findOne({ email });
+    const userDetails = await User.findOne({ email }).lean()
 
     if (!userDetails) {
         console.log(`[register user] user:${email} does not exists`);
@@ -61,22 +76,48 @@ export const validateOtp = async (otp: number, email: string) => {
     }
 
     const existingOtp = generateOtp(userDetails.email);
-    
+
     if (existingOtp !== otp) {
         console.log(`[validate otp] otp does not match, email:${userDetails.email}`);
         throw new ApiError(400, "OTP does not match");
     }
 
     await User.updateOne({ email }, { verifyed: true });
-    const token = generateToken(userDetails._id, userDetails.role);
 
     return {
         status: true,
         message: "OTP matched",
         data: {
             user: userDetails,
-            token
         }
+    }
+}
+
+export const createUserToken = async (user: UserType) => {
+    if (!user._id) {
+        new Error("[createUserToken] invalid userId");
+        return;
+    }
+
+    const familyId = generateFamilyId()
+    const accessToken = generateToken(user._id, user.role, "access",familyId);
+    const refreshToken = generateToken(user._id, user.role, "refresh", familyId);
+
+    if (!accessToken || !refreshToken) {
+        throw new Error("Failed to generate user tokens");
+    }
+
+    //save refresh tokon to redisClient
+    const userSessionData = { currentToken: refreshToken, createdAt: Date.now(), device: null };
+    const result = await redisClient.set(`token:${familyId}:rt`, JSON.stringify(userSessionData));
+    if(result !== "OK") {
+        throw new Error("Failed to save refresh token to redis");
+    }
+
+    return {
+        accessToken,
+        refreshToken,
+        familyId,
     }
 }
 
@@ -93,7 +134,10 @@ export const loginUser = async ({ email, password }: LoginUserInput) => {
         throw new ApiError(401, "Invalid email or password");
     }
 
-    const token = generateToken(userDetails?._id, userDetails?.role);
+    if(userDetails?.verified) {
+        console.log(`[login user] user:${userDetails?.email} is not verified`);
+        throw new ApiError(401, "User is not verified");
+    }
 
     const userObject = userDetails?.toObject();
     delete userObject?.password;
@@ -101,7 +145,6 @@ export const loginUser = async ({ email, password }: LoginUserInput) => {
 
     return {
         user: userObject,
-        token
     }
 }
 
@@ -114,4 +157,19 @@ export const getUserDetails = async (userId: string) => {
     const userObject = user?.toObject();
     delete (userObject as any).__v;
     return userObject;
+}
+
+
+// to completed
+export const logoutUser = async (userId: string) => {
+    await redisClient.del(`token:${userId}`);
+    return {
+        status: true,
+        message: "User logged out successfully",
+    }
+}
+
+
+export const refreshToken = async (user: UserType) => {
+
 }

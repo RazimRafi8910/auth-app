@@ -1,10 +1,13 @@
+import type { Types as MongoTypes } from 'mongoose';
+
 export enum UserRole { ADMIN = "admin", USER = "user" }
 
 export interface User {
     fullname: string,
     email: string,
-    role: UserRole,
-    _id?: string,
+    role: "admin" | "user",
+    verified: boolean,
+    _id:MongoTypes.ObjectId,
     createdAt: Date,
     updatedAt: Date,
 }

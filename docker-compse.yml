@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  web:
+      context: .
+      dockerfile: Dockerfile
+      ports :
+          - 5000:5000
+      environment:
+        - REDIS_HOST=redis
+        - REDIS_PORT=6379
+      networks:
+        - network
+  client:
+
+
+  redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
+    networks:
+      - network
+
+  network:
+    driver: bridge
+    name: app-network

@@ -1,4 +1,6 @@
-import mongoose,{Schema} from "mongoose";
+import mongoose, { Schema, InferSchemaType } from "mongoose";
+import z from "zod";
+import type { User } from "../../types/appTypes/app.js";
 
 const userSchema = new Schema({
     fullname: {
@@ -7,9 +9,15 @@ const userSchema = new Schema({
     },
     email: {
         type: String,
-        required: true
+        required: true,
+        unique: true,
+        lowercase: true,
+        validate: {
+            validator: (email: string) => z.string().email().safeParse(email).success,
+            message: "Invalid email address",
+        }
     },
-    verifyed: {
+    verified: {
         type: Boolean,
         required: true,
         default:false
@@ -22,12 +30,14 @@ const userSchema = new Schema({
     },
     password: {
         type: String,
-        requried: true,
+        require: true,
         select: false,
     }
-}, { timestamps: true });
+}, { timestamps: true,_id:true });
 
 
+type UserType = InferSchemaType<typeof userSchema> & User;
 const User = mongoose.model('users', userSchema);
 
+export type { UserType };
 export default User;

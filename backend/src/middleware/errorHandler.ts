@@ -6,20 +6,15 @@ export const handleNotFound = (req: Request, res: Response,) => {
     res.status(404).json({ message: "url not found" });
 }
 
-export const errorHandler = (err:ApiError,req: Request, res: Response,next:NextFunction) => {
-    const statusCode = err.statusCode || 500;
-    const message = statusCode == 500 ? "Internal server error" : err.message;
-    const success = err.success || false;
-    
+export const errorHandler = (err: Error | ApiError, req: Request, res: Response, next: NextFunction) => {
+    if (err instanceof ApiError) {
+        res.status(err.statusCode).json({ success: err.success, message: err.message });
+        return;
+    }
     console.log(`[error handler] ${err.message}`);
     if (process.env.NODE_ENV == "development") {
         console.log(err.stack);
     }
 
-    res.status(statusCode).json({
-        success,
-        statusCode,
-        message,
-        errors: err.errors || [],
-    });
+    res.status(500).json({ message: "Internal server error" });
 }

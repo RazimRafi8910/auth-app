@@ -7,7 +7,7 @@ const router = Router()
 
 router.get('/', (req: Request, res: Response) => {
     res.send(200).json({ message: "server is running" });
-})
+});
 router.use('/auth', authRoutes);
 router.use('/admin', adminRoutes);
 router.use('/users', userRoutes);
