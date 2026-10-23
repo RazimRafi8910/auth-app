@@ -20,6 +20,7 @@ const corsOptions = {
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 100,
+    message:"hit the rate limite"
 });
 
 app.use(cors(corsOptions));

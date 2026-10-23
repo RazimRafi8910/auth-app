@@ -10,8 +10,8 @@ import User, { UserType } from '../user/user.model.js';
 const jwtKey = process.env.JWT_KEY || "";
 
 export const registerUser = async ({ fullname, email, password }: RegisterUserInput) => {
-    const isUserExists = await User.findOne({ email });
-
+    const isUserExists = await User.findOne({ email }).lean();
+    console.log(isUserExists)
     if (isUserExists) {
         if (isUserExists.verified) {
             console.log(`[register user] user:${email} already exists`);
@@ -59,6 +59,7 @@ export const generateUserOtp = async (email: string) => {
     const otp = generateTimeWindowOtp(user.email);
 
     //store otp on redis with ttl
+    await redisClient.set(`user:${user.email}:otp`,otp);
 
     return {
         status: true,
@@ -75,14 +76,14 @@ export const validateOtp = async (otp: number, email: string) => {
         throw new ApiError(404, "Email not found");
     }
 
-    const existingOtp = generateOtp(userDetails.email);
+    const existingOtp = generateTimeWindowOtp(userDetails.email);
 
     if (existingOtp !== otp) {
         console.log(`[validate otp] otp does not match, email:${userDetails.email}`);
         throw new ApiError(400, "OTP does not match");
     }
 
-    await User.updateOne({ email }, { verifyed: true });
+    await User.updateOne({ email }, { verified: true });
 
     return {
         status: true,
@@ -95,7 +96,7 @@ export const validateOtp = async (otp: number, email: string) => {
 
 export const createUserToken = async (user: UserType) => {
     if (!user._id) {
-        new Error("[createUserToken] invalid userId");
+        throw new Error("[createUserToken] invalid userId");
         return;
     }
 
@@ -104,17 +105,23 @@ export const createUserToken = async (user: UserType) => {
     const refreshToken = generateToken(user._id, user.role, "refresh", familyId);
 
     if (!accessToken || !refreshToken) {
+        console.log(`[createUserToken] accessToken${accessToken}, refresh: ${refreshToken}`)
         throw new Error("Failed to generate user tokens");
     }
 
     //save refresh tokon to redisClient
+    const rtKey = `token:${familyId}:rt`;
     const userSessionData = { currentToken: refreshToken, createdAt: Date.now(), device: null };
-    const result = await redisClient.set(`token:${familyId}:rt`, JSON.stringify(userSessionData));
+    const result = await redisClient.set(rtKey, JSON.stringify(userSessionData));
+    console.log(result)
+    await redisClient.expire(rtKey, ((60 * 60 * 24 * 7) + (60 * 5))); //ttl :7d + 5min
+
     if(result !== "OK") {
         throw new Error("Failed to save refresh token to redis");
     }
 
     return {
+        status:true,
         accessToken,
         refreshToken,
         familyId,
@@ -144,6 +151,8 @@ export const loginUser = async ({ email, password }: LoginUserInput) => {
     delete (userObject as any).__v;
 
     return {
+        status: true,
+        login:true,
         user: userObject,
     }
 }
@@ -170,6 +179,6 @@ export const logoutUser = async (userId: string) => {
 }
 
 
-export const refreshToken = async (user: UserType) => {
+export const refreshToken = async (refreshToken: string, tokenUser: UserType) => {
 
 }

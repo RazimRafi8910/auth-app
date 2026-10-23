@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { createUserToken, generateUserOtp, getUserDetails, loginUser, registerUser, validateOtp } from "./auth.service.js";
 import ApiResponse from "../../utils/apiResponse.js";
-import { COOKIE_MAX_AGE_MS } from "../../config/contants.js";
+import { AT_COOKIE_MAX_AGE, RT_COOKIE_MAX_AGE } from "../../config/contants.js";
 import ApiError from "../../utils/apiError.js";
 
 export const registerController = async (req: Request, res: Response) => {
@@ -35,23 +35,59 @@ export const otpController = async (req: Request, res: Response) => {
     }
 
     const userTokenResult = await createUserToken(otpValidateResult.data.user);
-    res.cookie("accessToken", userTokenResult?.accessToken, {
+
+    if (!userTokenResult?.status|| userTokenResult?.accessToken == undefined || userTokenResult.refreshToken == undefined) {
+        throw new Error("[otpController] undefined access or token");
+    }
+
+    const cookieOption = {
         secure: process.env.NODE_ENV == "production",
-        sameSite: 'lax',
         httpOnly: true,
-        maxAge: COOKIE_MAX_AGE_MS,
+        sameSite: 'lax' as const,
+    }
+
+    res.cookie("accessToken", userTokenResult?.accessToken, {
+        ...cookieOption,
+        maxAge: AT_COOKIE_MAX_AGE,
     });
+
+    res.cookie("accessToken", userTokenResult?.refreshToken, {
+        ...cookieOption,
+        maxAge: RT_COOKIE_MAX_AGE,
+        path: '/api/auth/refresh',
+    });
+
     res.status(200).json(new ApiResponse(200, "OTP Matched, account varifyed", { status: true }));
 }
 
 export const loginController = async (req: Request, res: Response) => {
     const result = await loginUser(req.body);
 
-    res.cookie("token", result.token, {
+    if (!result.login || !result.status) {
+        throw new Error("Internal server Error");
+    }
+
+    const tokenResult = await createUserToken(result.user);
+
+    if (!tokenResult?.status || tokenResult?.accessToken === undefined || tokenResult?.refreshToken === undefined) {
+        throw new Error(`[loginController] undefined access or refresh token, accessToken:${tokenResult?.accessToken}`);
+    }
+
+    const cookieOption = {
         secure: process.env.NODE_ENV == "production",
-        sameSite: 'lax',
+        sameSite: 'lax' as const,
         httpOnly: true,
-        maxAge:COOKIE_MAX_AGE_MS,
+    }
+
+    res.cookie("accessToken", tokenResult?.accessToken, {
+        ...cookieOption,
+        maxAge:AT_COOKIE_MAX_AGE,
+    });
+
+    res.cookie("refreshToken", tokenResult?.refreshToken, {
+        ...cookieOption,
+        maxAge: RT_COOKIE_MAX_AGE,
+        path: '/api/auth/refresh'
     });
 
     res.status(200).json(new ApiResponse(200, "Login successful",result.user));
@@ -63,7 +99,8 @@ export const logOutController = async (req: Request, res: Response) => {
         throw new ApiError(401, "Not authenticated. Please login.");
     }
 
-    res.clearCookie('token', { httpOnly: true });
+    res.clearCookie('accessToken', { httpOnly: true });
+    res.clearCookie('refreshToken', { httpOnly: true });
     res.status(200).json(new ApiResponse(200, "Logged out successfully",null));
 }
 

@@ -1,8 +1,9 @@
 import { generateCryptoId, generateHash } from "../../utils/crypto.uilts.js";
 import { Types } from "mongoose";
+import { JWT_EXPIRY_AT, JWT_EXPIRY_RT } from "../../config/contants.js";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_KEY = process.env.JWT_KEY;
 
 export function generateTimeWindowOtp(email: string,) {
     const expireWindow = Math.floor(Date.now() / 1000 / 300); // converts to seconds and drop 5min (300)
@@ -14,14 +15,14 @@ export function generateTimeWindowOtp(email: string,) {
 }
 
 export function generateToken(userId: Types.ObjectId | string, role: string, type: "access" | "refresh"= "access",familyId:string) {
-    const expireWindow = type == "access" ? "15m" : "7d";
+    const expireWindow = type == "access" ? JWT_EXPIRY_AT : JWT_EXPIRY_RT;
     const payload = {
         userId: userId,
         role,
         familyId
     }
-    if(!JWT_SECRET) return null;
-    const token = jwt.sign(payload, JWT_SECRET,{expiresIn: expireWindow});
+    if(!JWT_KEY) return null;
+    const token = jwt.sign(payload, JWT_KEY,{expiresIn: expireWindow});
     return token;
 }
 
